@@ -429,7 +429,8 @@ export class GeminiClient {
       const requestConfig = {
         abortSignal,
         ...this.generateContentConfig,
-        ...config,
+        temperature: 0, // Default to 0 for deterministic JSON
+        ...config, // Still allow overrides
       };
 
       const apiCall = () =>

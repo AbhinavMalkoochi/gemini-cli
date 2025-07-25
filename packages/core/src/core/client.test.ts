@@ -1229,28 +1229,73 @@ Here are files the user has recently opened, with the most recent at the top:
         });
       });
   
-      it('should use temperature from config in generateJson when no custom config provided', async () => {
+      it('should use temperature 0 by default in generateJson regardless of config temperature', async () => {
         const contents = [{ role: 'user', parts: [{ text: 'test' }] }];
         const schema = { type: 'string' };
-        const customTemperature = 0.8;
+        const configTemperature = 1.5;
         
-        // Mock config to return custom temperature
-        vi.spyOn(client['config'], 'getTemperature').mockReturnValue(customTemperature);
+        // Create a new client with non-zero temperature to verify generateJson still uses 0
+        const fileService = new FileDiscoveryService('/test/dir');
+        const testContentGeneratorConfig = {
+          model: 'test-model',
+          apiKey: 'test-key',
+          vertexai: false,
+          authType: AuthType.USE_GEMINI,
+        };
+        
+        const customMockConfigObject = {
+          getContentGeneratorConfig: vi
+            .fn()
+            .mockReturnValue(testContentGeneratorConfig),
+          getToolRegistry: vi.fn().mockResolvedValue({
+            getFunctionDeclarations: vi.fn().mockReturnValue([]),
+            getTool: vi.fn().mockReturnValue(null),
+          }),
+          getModel: vi.fn().mockReturnValue('test-model'),
+          getEmbeddingModel: vi.fn().mockReturnValue('test-embedding-model'),
+          getApiKey: vi.fn().mockReturnValue('test-key'),
+          getVertexAI: vi.fn().mockReturnValue(false),
+          getUserAgent: vi.fn().mockReturnValue('test-agent'),
+          getUserMemory: vi.fn().mockReturnValue(''),
+          getFullContext: vi.fn().mockReturnValue(false),
+          getSessionId: vi.fn().mockReturnValue('test-session-id'),
+          getProxy: vi.fn().mockReturnValue(undefined),
+          getWorkingDir: vi.fn().mockReturnValue('/test/dir'),
+          getFileService: vi.fn().mockReturnValue(fileService),
+          getMaxSessionTurns: vi.fn().mockReturnValue(0),
+          getQuotaErrorOccurred: vi.fn().mockReturnValue(false),
+          setQuotaErrorOccurred: vi.fn(),
+          getNoBrowser: vi.fn().mockReturnValue(false),
+          getUsageStatisticsEnabled: vi.fn().mockReturnValue(true),
+          getIdeMode: vi.fn().mockReturnValue(false),
+          getTemperature: vi.fn().mockReturnValue(configTemperature), // Non-zero temperature
+          getGeminiClient: vi.fn(),
+        };
+        
+        const CustomMockedConfig = vi.mocked(Config, true);
+        CustomMockedConfig.mockImplementation(
+          () => customMockConfigObject as unknown as Config,
+        );
+        
+        const customClient = new GeminiClient(new Config({} as never));
+        customMockConfigObject.getGeminiClient.mockReturnValue(customClient);
+        
+        await customClient.initialize(testContentGeneratorConfig);
   
         const mockGenerator: Partial<ContentGenerator> = {
           countTokens: vi.fn().mockResolvedValue({ totalTokens: 1 }),
           generateContent: mockGenerateContentFn,
         };
-        client['contentGenerator'] = mockGenerator as ContentGenerator;
+        customClient['contentGenerator'] = mockGenerator as ContentGenerator;
   
-        await client.generateJson(contents, schema, new AbortController().signal);
+        await customClient.generateJson(contents, schema, new AbortController().signal);
   
         expect(mockGenerateContentFn).toHaveBeenCalledWith({
           model: 'test-model',
           config: {
             abortSignal: expect.any(AbortSignal),
             systemInstruction: getCoreSystemPrompt(''),
-            temperature: 0, // generateJson should still use 0 for deterministic output
+            temperature: 0, // Should always be 0 for deterministic output
             topP: 1,
             responseSchema: schema,
             responseMimeType: 'application/json',
