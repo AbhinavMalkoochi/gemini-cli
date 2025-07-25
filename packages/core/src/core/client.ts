@@ -115,6 +115,12 @@ export class GeminiClient {
 
     this.embeddingModel = config.getEmbeddingModel();
     this.loopDetector = new LoopDetectionService(config);
+    
+    // Update generateContentConfig with temperature from config
+    this.generateContentConfig = {
+      temperature: config.getTemperature(),
+      topP: 1,
+    };
   }
 
   async initialize(contentGeneratorConfig: ContentGeneratorConfig) {
@@ -423,7 +429,8 @@ export class GeminiClient {
       const requestConfig = {
         abortSignal,
         ...this.generateContentConfig,
-        ...config,
+        temperature: 0, // Default to 0 for deterministic JSON
+        ...config, // Still allow overrides
       };
 
       const apiCall = () =>
